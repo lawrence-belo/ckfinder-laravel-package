@@ -39,7 +39,7 @@ class FileUpload extends CommandAbstract
 
     protected $requires = [Permission::FILE_CREATE];
 
-    public function execute(Request $request, WorkingFolder $workingFolder, EventDispatcher $dispatcher, Config $config, CacheManager $cache, ThumbnailRepository $thumbsRepository)
+    public function execute(Request $request, WorkingFolder $workingFolder, EventDispatcher $dispatcher, Config $config, ThumbnailRepository $thumbsRepository)
     {
         // #111 IE9 download JSON issue workaround
         if ($request->get('asPlainText')) {
@@ -123,14 +123,6 @@ class FileUpload extends CommandAbstract
                 $uploadedFile->save($imageData);
             }
 
-            $cache->set(
-                Path::combine(
-                    $workingFolder->getResourceType()->getName(),
-                    $workingFolder->getClientCurrentFolder(),
-                    $fileName
-                ),
-                $image->getInfo()
-            );
 
             unset($imageData, $image);
         }

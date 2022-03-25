@@ -18,6 +18,7 @@ use CKSource\CKFinder\Error;
 use CKSource\CKFinder\Exception\InvalidExtensionException;
 use CKSource\CKFinder\Exception\InvalidRequestException;
 use CKSource\CKFinder\Filesystem\Path;
+use League\Flysystem\FilesystemException;
 
 /**
  * The DeletedFile class.
@@ -35,16 +36,19 @@ class DeletedFile extends ExistingFile
      */
     public function doDelete()
     {
-        if ($this->resourceType->getBackend()->delete($this->getFilePath())) {
+        try {
+            $this->resourceType->getBackend()->delete($this->getFilePath());
+
             $this->deleteThumbnails();
             $this->deleteResizedImages();
             $this->getCache()->delete(Path::combine($this->resourceType->getName(), $this->folder, $this->getFilename()));
 
             return true;
-        }
-        $this->addError(Error::ACCESS_DENIED);
+        } catch (FilesystemException $e) {
+            $this->addError(Error::ACCESS_DENIED);
 
-        return false;
+            return false;
+        }
     }
 
     public function isValid()

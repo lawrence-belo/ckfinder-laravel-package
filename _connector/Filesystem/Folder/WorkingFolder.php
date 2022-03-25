@@ -31,7 +31,9 @@ use CKSource\CKFinder\ResourceType\ResourceType;
 use CKSource\CKFinder\Response\JsonResponse;
 use CKSource\CKFinder\Thumbnail\ThumbnailRepository;
 use CKSource\CKFinder\Utils;
+use League\Flysystem\FilesystemException;
 use League\Flysystem\Util\MimeType;
+use League\MimeTypeDetection\ExtensionMimeTypeDetector;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -127,7 +129,7 @@ class WorkingFolder extends Folder implements EventSubscriberInterface
             !empty($resourceTypeDirectory) &&
             !$backend->hasDirectory($this->path)) {
             if ('/' === $this->clientCurrentFolder) {
-                @$backend->createDir($resourceTypeDirectory);
+                @$backend->createDirectory($resourceTypeDirectory);
 
                 if (!$backend->hasDirectory($resourceTypeDirectory)) {
                     throw new AccessDeniedException("Couldn't create resource type directory. Please check permissions.");
@@ -263,13 +265,13 @@ class WorkingFolder extends Folder implements EventSubscriberInterface
             throw new AlreadyExistsException('Folder already exists');
         }
 
-        $result = $backend->createDir($dirPath);
-
-        if (!$result) {
+        try {
+            $backend->createDirectory($dirPath);
+        } catch (FilesystemException $e) {
             throw new AccessDeniedException("Couldn't create new folder. Please check permissions.");
         }
 
-        return [$dirname, $result];
+        return [$dirname, true];
     }
 
     /**
@@ -319,13 +321,18 @@ class WorkingFolder extends Folder implements EventSubscriberInterface
         $filePath = Path::combine($this->getPath(), $fileName);
 
         if (!$mimeType) {
-            $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            $mimeType = MimeType::detectByFileExtension($ext);
+            $mimeType = (new ExtensionMimeTypeDetector())->detectMimeTypeFromPath($fileName);
         }
 
         $options = $mimeType ? ['mimetype' => $mimeType] : [];
 
-        return $backend->putStream($filePath, $resource, $options);
+        try {
+            $backend->writeStream($filePath, $resource, $options);
+        } catch (FilesystemException $e) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

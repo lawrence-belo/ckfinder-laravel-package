@@ -104,10 +104,6 @@ class Thumbnail extends ResizedImageAbstract
 
         // Update cached info about image
         $app = $this->thumbnailRepository->getContainer();
-        $app['cache']->set(
-            Path::combine($this->sourceFileResourceType->getName(), $this->sourceFileDir, $this->sourceFileName),
-            $image->getInfo()
-        );
 
         $image->resize($this->adjustedSizeInfo['width'], $this->adjustedSizeInfo['height'], $this->adjustedSizeInfo['quality']);
 

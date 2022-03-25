@@ -22,6 +22,8 @@ use CKSource\CKFinder\Exception\FolderNotFoundException;
 use CKSource\CKFinder\Filesystem\Path;
 use CKSource\CKFinder\ResourceType\ResourceType;
 use CKSource\CKFinder\Utils;
+use League\Flysystem\FileAttributes;
+use League\Flysystem\PathPrefixer;
 use SplFileInfo;
 
 /**
@@ -31,7 +33,7 @@ use SplFileInfo;
  * additions for `chmod` permissions management and conversions
  * between the file system and connector file name encoding.
  */
-class Local extends \League\Flysystem\Adapter\Local
+class Local extends \League\Flysystem\Local\LocalFilesystemAdapter
 {
     /**
      * Backend configuration node.
@@ -39,6 +41,8 @@ class Local extends \League\Flysystem\Adapter\Local
      * @var array
      */
     protected $backendConfig;
+
+    private $pathPrefixer;
 
     /**
      * Constructor.
@@ -66,10 +70,8 @@ class Local extends \League\Flysystem\Adapter\Local
             throw new AccessDeniedException(sprintf('The root folder of backend "%s" is not readable (%s)', $backendConfig['name'], $backendConfig['root']));
         }
 
-        parent::__construct($backendConfig['root'], LOCK_EX, self::SKIP_LINKS, [
-            'file' => ['public' => $backendConfig['chmodFiles']],
-            'dir' => ['public' => $backendConfig['chmodFolders']],
-        ]);
+        $this->pathPrefixer = new PathPrefixer($backendConfig['root'], DIRECTORY_SEPARATOR);
+        parent::__construct($backendConfig['root'], null,LOCK_EX, self::SKIP_LINKS);
     }
 
     /**
@@ -81,8 +83,7 @@ class Local extends \League\Flysystem\Adapter\Local
      */
     public function createWriteStream($path)
     {
-        $location = $this->applyPathPrefix($path);
-        $this->ensureDirectory(\dirname($location));
+        $location = $this->pathPrefixer->prefixPath($path);
         $chmodFiles = $this->backendConfig['chmodFiles'];
 
         if (!$stream = fopen($location, 'a+')) {
@@ -105,7 +106,7 @@ class Local extends \League\Flysystem\Adapter\Local
      */
     public function containsDirectories(Backend $backend, ResourceType $resourceType, $clientPath, Acl $acl)
     {
-        $location = rtrim($this->applyPathPrefix(Path::combine($resourceType->getDirectory(), $clientPath)), '/\\').'/';
+        $location = rtrim($this->pathPrefixer->prefixPath(Path::combine($resourceType->getDirectory(), $clientPath)), '/\\').'/';
 
         if (!is_dir($location) || (false === $fh = @opendir($location))) {
             return false;
@@ -143,13 +144,13 @@ class Local extends \League\Flysystem\Adapter\Local
      */
     public function deleteDir($dirname)
     {
-        $location = $this->applyPathPrefix($dirname);
+        $location = $this->pathPrefixer->prefixPath($dirname);
 
         if ($this->backendConfig['followSymlinks'] && is_link($location)) {
             return unlink($location);
         }
 
-        return parent::deleteDir($dirname);
+        $this->deleteDirectory($dirname);
     }
 
     /**
@@ -160,8 +161,6 @@ class Local extends \League\Flysystem\Adapter\Local
         if ($this->backendConfig['followSymlinks']) {
             return $this->mapFileInfo($file);
         }
-
-        return parent::normalizeFileInfo($file);
     }
 
     /**
@@ -169,7 +168,7 @@ class Local extends \League\Flysystem\Adapter\Local
      */
     protected function mapFileInfo(SplFileInfo $file)
     {
-        $normalized = parent::mapFileInfo($file);
+        $normalized = [];
 
         if ($this->backendConfig['followSymlinks'] && $file->isLink()) {
             $normalized['type'] = $file->isDir() ? 'dir' : 'file';

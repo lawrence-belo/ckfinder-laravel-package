@@ -38,7 +38,8 @@ class CopyFiles extends CommandAbstract
 
     public function execute(Request $request, ResourceTypeFactory $resourceTypeFactory, Acl $acl, EventDispatcher $dispatcher)
     {
-        $copiedFiles = (array) $request->request->get('files');
+        $requestData = $request->request->all();
+        $copiedFiles = $requestData['files'];
 
         $copied = 0;
 

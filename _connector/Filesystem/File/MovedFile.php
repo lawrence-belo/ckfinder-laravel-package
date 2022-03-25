@@ -56,7 +56,8 @@ class MovedFile extends CopiedFile
             $this->resourceType->getResizedImageRepository()->deleteResizedImages($this->resourceType, $this->folder, $originalFileName);
             $this->getCache()->delete(Path::combine($this->resourceType->getName(), $this->folder, $originalFileName));
 
-            return $this->resourceType->getBackend()->delete($originalFilePath);
+            $this->resourceType->getBackend()->delete($originalFilePath);
+            return true;
         }
 
         return false;

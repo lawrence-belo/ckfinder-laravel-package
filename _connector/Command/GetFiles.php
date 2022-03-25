@@ -31,9 +31,9 @@ class GetFiles extends CommandAbstract
 
         foreach ($files as $file) {
             $fileObject = [
-                'name' => $file['basename'],
-                'date' => Utils::formatDate($file['timestamp']),
-                'size' => Utils::formatSize($file['size']),
+                'name' => pathinfo($file['path'], PATHINFO_BASENAME),
+                'date' => Utils::formatDate($file['lastModified']),
+                'size' => Utils::formatSize($file['fileSize']),
             ];
 
             $data->files[] = $fileObject;

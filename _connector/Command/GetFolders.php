@@ -34,10 +34,10 @@ class GetFolders extends CommandAbstract
         $resourceType = $workingFolder->getResourceType();
 
         foreach ($directories as $directory) {
+            $basename = pathinfo($directory['path'], PATHINFO_BASENAME);
             $data->folders[] = [
-                'name' => $directory['basename'],
-                'hasChildren' => $backend->containsDirectories($resourceType, Path::combine($workingFolder->getClientCurrentFolder(), $directory['basename'])),
-                'acl' => $directory['acl'],
+                'name' => $basename,
+                'hasChildren' => $backend->containsDirectories($resourceType, Path::combine($workingFolder->getClientCurrentFolder(), $basename))
             ];
         }
 

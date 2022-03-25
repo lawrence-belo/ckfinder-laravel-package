@@ -97,8 +97,6 @@ class ResizedImage extends ResizedImageAbstract
 
                 $originalImage = $this->image = Image::create($backend->read($sourceFilePath));
 
-                $app['cache']->set($cacheKey, $originalImage->getInfo());
-
                 $originalImageWidth = $originalImage->getWidth();
                 $originalImageHeight = $originalImage->getHeight();
             } else {

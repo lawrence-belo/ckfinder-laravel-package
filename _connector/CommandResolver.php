@@ -96,7 +96,7 @@ class CommandResolver implements ControllerResolverInterface
      *
      * @return callable callable built to execute the command
      */
-    public function getController(Request $request)
+    public function getController(Request $request): callable|false
     {
         $commandName = ucfirst((string) $request->get('command'));
 

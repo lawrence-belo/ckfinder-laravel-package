@@ -120,7 +120,7 @@ class CopiedFile extends ExistingFile
             return false;
         }
 
-        $fileMetadata = $backend->getMetadata($filePath);
+        $fileMetadata = $backend->getWithMetaData($filePath);
 
         $fileSize = $fileMetadata['size'];
 

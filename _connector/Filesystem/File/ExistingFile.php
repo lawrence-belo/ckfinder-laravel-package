@@ -20,6 +20,7 @@ use CKSource\CKFinder\Exception\InvalidUploadException;
 use CKSource\CKFinder\Filesystem\Path;
 use CKSource\CKFinder\Image;
 use CKSource\CKFinder\ResourceType\ResourceType;
+use League\Flysystem\FilesystemException;
 
 /**
  * The ExistingFile class.
@@ -157,7 +158,7 @@ abstract class ExistingFile extends File
             return false;
         }
 
-        $fileMetadata = $backend->getMetadata($filePath);
+        $fileMetadata = $backend->getWithMetaData($filePath);
 
         return isset($fileMetadata['type']) && 'file' === $fileMetadata['type'];
     }
@@ -208,13 +209,15 @@ abstract class ExistingFile extends File
             throw new InvalidUploadException('New file contents is too big for resource type limit', Error::UPLOADED_TOO_BIG);
         }
 
-        $saved = $this->resourceType->getBackend()->put($filePath, $contents);
-
-        if ($saved) {
-            $this->deleteThumbnails();
+        try {
+            $this->resourceType->getBackend()->write($filePath, $contents);
+        } catch (FilesystemException $e) {
+            return false;
         }
 
-        return $saved;
+        $this->deleteThumbnails();
+
+        return true;
     }
 
     /**
@@ -326,7 +329,7 @@ abstract class ExistingFile extends File
         if (null === $this->metadata) {
             $filePath = $this->getFilePath();
 
-            $this->metadata = $this->resourceType->getBackend()->getWithMetadata($filePath, ['mimetype', 'timestamp']);
+            $this->metadata = $this->resourceType->getBackend()->getWithMetadata($filePath);
         }
 
         return $this->metadata;

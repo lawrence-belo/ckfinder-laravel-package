@@ -38,7 +38,8 @@ class MoveFiles extends CommandAbstract
 
     public function execute(Request $request, ResourceTypeFactory $resourceTypeFactory, Acl $acl, EventDispatcher $dispatcher)
     {
-        $movedFiles = (array) $request->request->get('files');
+        $requestData = $request->request->all();
+        $movedFiles = $requestData['files'];
 
         $moved = 0;
 

@@ -39,7 +39,7 @@ class JsonResponse extends HttpFoundation\JsonResponse
         return $this->rawData;
     }
 
-    public function setData($data = [])
+    public function setData($data = []): static
     {
         $this->rawData = $data;
 

@@ -27,7 +27,7 @@ use CKSource\CKFinder\Config;
 use CKSource\CKFinder\ContainerAwareInterface;
 use CKSource\CKFinder\Exception\CKFinderException;
 use CKSource\CKFinder\Filesystem\Path;
-use League\Flysystem\AdapterInterface;
+use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\Cached\CachedAdapter;
 use League\Flysystem\Cached\CacheInterface;
 use MicrosoftAzure\Storage\Common\ServicesBuilder;
@@ -109,23 +109,23 @@ class BackendFactory
      *
      * @return Backend
      */
-    public function createBackend(array $backendConfig, AdapterInterface $adapter, array $filesystemConfig = null, CacheInterface $cache = null)
+    public function createBackend(array $backendConfig, FilesystemAdapter $adapter, array $filesystemConfig = null, CacheInterface $cache = null)
     {
         if ($adapter instanceof ContainerAwareInterface) {
             $adapter->setContainer($this->app);
         }
 
-        if (null === $cache) {
-            $cache = new MemoryCache();
-        }
-
-        $cachedAdapter = new CachedAdapter($adapter, $cache);
+//        if (null === $cache) {
+//            $cache = new MemoryCache();
+//        }
+//
+//        $cachedAdapter = new CachedAdapter($adapter, $cache);
 
         if (\array_key_exists($backendConfig['adapter'], static::$trackedOperations)) {
             $backendConfig['trackedOperations'] = static::$trackedOperations[$backendConfig['adapter']];
         }
 
-        return new Backend($backendConfig, $this->app, $cachedAdapter, $filesystemConfig);
+        return new Backend($backendConfig, $this->app, $adapter, $filesystemConfig);
     }
 
     /**

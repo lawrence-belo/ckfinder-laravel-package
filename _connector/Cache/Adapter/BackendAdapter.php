@@ -16,6 +16,7 @@ namespace CKSource\CKFinder\Cache\Adapter;
 
 use CKSource\CKFinder\Backend\Backend;
 use CKSource\CKFinder\Filesystem\Path;
+use League\Flysystem\FilesystemException;
 
 /**
  * The BackendAdapter class.
@@ -66,7 +67,13 @@ class BackendAdapter implements AdapterInterface
      */
     public function set($key, $value)
     {
-        return $this->backend->put($this->createCachePath($key), serialize($value));
+        try {
+            $this->backend->write($this->createCachePath($key), serialize($value));
+        } catch (FilesystemException $e) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

@@ -27,7 +27,9 @@ use League\Flysystem\Adapter\Ftp;
 use League\Flysystem\AdapterInterface;
 use League\Flysystem\Cached\CachedAdapter;
 use League\Flysystem\Filesystem;
-use League\Flysystem\Plugin\GetWithMetadata;
+use League\Flysystem\FilesystemAdapter;
+use League\Flysystem\FilesystemException;
+use League\MimeTypeDetection\ExtensionMimeTypeDetector;
 
 /**
  * The Backend file system class.
@@ -63,24 +65,27 @@ class Backend extends Filesystem
      */
     protected $backendConfig;
 
+    protected $baseAdapter;
+
     /**
      * Constructor.
      *
-     * @param array            $backendConfig    the backend configuration node
-     * @param CKFinder         $app              the CKFinder app container
-     * @param AdapterInterface $adapter          the adapter
-     * @param null|array       $filesystemConfig the configuration
+     * @param array             $backendConfig    the backend configuration node
+     * @param CKFinder          $app              the CKFinder app container
+     * @param FilesystemAdapter $adapter          the adapter
+     * @param null|array        $filesystemConfig the configuration
      */
-    public function __construct(array $backendConfig, CKFinder $app, AdapterInterface $adapter, $filesystemConfig = null)
+    public function __construct(array $backendConfig, CKFinder $app, FilesystemAdapter $adapter, $filesystemConfig = null)
     {
         $this->app = $app;
         $this->backendConfig = $backendConfig;
         $this->acl = $app['acl'];
         $this->ckConfig = $app['config'];
+        $this->baseAdapter = $adapter;
 
-        parent::__construct($adapter, $filesystemConfig);
+        parent::__construct($adapter, $filesystemConfig ?? []);
 
-        $this->addPlugin(new GetWithMetadata());
+//        $this->addPlugin(new GetWithMetadata());
     }
 
     /**
@@ -129,16 +134,20 @@ class Backend extends Filesystem
         $directoryPath = $this->buildPath($resourceType, $path);
         $contents = $this->listContents($directoryPath, $recursive);
 
-        foreach ($contents as &$entry) {
-            $entry['acl'] = $this->acl->getComputedMask($resourceType->getName(), Path::combine($path, $entry['basename']));
+        $directories = [];
+        foreach ($contents as $v) {
+            $acl = $this->acl->getComputedMask($resourceType->getName(), Path::combine($path, $v['path']));
+
+            if (isset($v['type']) &&
+                'dir' === $v['type'] &&
+                !$this->isHiddenFolder(pathinfo($v['path'], PATHINFO_BASENAME)) &&
+                $acl & Permission::FOLDER_VIEW
+            ) {
+                $directories[] = $v;
+            }
         }
 
-        return array_filter($contents, function ($v) {
-            return isset($v['type']) &&
-                   'dir' === $v['type'] &&
-                   !$this->isHiddenFolder($v['basename']) &&
-                   $v['acl'] & Permission::FOLDER_VIEW;
-        });
+        return $directories;
     }
 
     /**
@@ -154,12 +163,19 @@ class Backend extends Filesystem
         $directoryPath = $this->buildPath($resourceType, $path);
         $contents = $this->listContents($directoryPath, $recursive);
 
-        return array_filter($contents, function ($v) use ($resourceType) {
-            return isset($v['type']) &&
-                   'file' === $v['type'] &&
-                   !$this->isHiddenFile($v['basename']) &&
-                   $resourceType->isAllowedExtension(isset($v['extension']) ? $v['extension'] : '');
-        });
+        $files = [];
+        foreach ($contents as $v) {
+            $extension = isset($v['path']) ? pathinfo($v['path'], PATHINFO_EXTENSION) : '';
+            if (isset($v['type']) &&
+                'file' === $v['type'] &&
+                !$this->isHiddenFile($v['path']) &&
+                $resourceType->isAllowedExtension($extension)
+            ) {
+                $files[] = $v;
+            }
+        }
+
+        return $files;
     }
 
     /**
@@ -188,9 +204,10 @@ class Backend extends Filesystem
         }
 
         foreach ($contents as $entry) {
+            $basename = pathinfo($entry['path'], PATHINFO_BASENAME);
             if ('dir' === $entry['type'] &&
-                !$this->isHiddenFolder($entry['basename']) &&
-                $this->acl->isAllowed($resourceType->getName(), Path::combine($path, $entry['basename']), Permission::FOLDER_VIEW)
+                !$this->isHiddenFolder($basename) &&
+                $this->acl->isAllowed($resourceType->getName(), Path::combine($path, $basename), Permission::FOLDER_VIEW)
             ) {
                 return true;
             }
@@ -272,7 +289,13 @@ class Backend extends Filesystem
             $this->deleteContents($dirname);
         }
 
-        return parent::deleteDir($dirname);
+        try {
+            $this->deleteDirectory($dirname);
+        } catch (FilesystemException $e) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -317,7 +340,8 @@ class Backend extends Filesystem
         }
 
         foreach ($contents as $c) {
-            if (isset($c['type'], $c['basename']) && 'dir' === $c['type'] && $c['basename'] === $dirName) {
+            $basename = pathinfo($c['path'], PATHINFO_BASENAME);
+            if (isset($c['type'], $c['path']) && 'dir' === $c['type'] && $basename === $dirName) {
                 return true;
             }
         }
@@ -450,11 +474,16 @@ class Backend extends Filesystem
     {
         $baseAdapter = $this->getBaseAdapter();
 
-        if (($baseAdapter instanceof EmulateRenameDirectoryInterface) && $this->hasDirectory($path)) {
-            return $baseAdapter->renameDirectory($path, $newpath);
+        try {
+            if (($baseAdapter instanceof EmulateRenameDirectoryInterface) && $this->hasDirectory($path)) {
+                return $baseAdapter->renameDirectory($path, $newpath);
+            }
+            $this->move($path, $newpath);
+        } catch (FilesystemException $e) {
+            return false;
         }
 
-        return parent::rename($path, $newpath);
+        return true;
     }
 
     /**
@@ -463,14 +492,44 @@ class Backend extends Filesystem
      * The used adapter might be decorated with CachedAdapter. In this
      * case the returned adapter is the internal one used by CachedAdapter.
      *
-     * @return AdapterInterface
+     * @return FilesystemAdapter
      */
     public function getBaseAdapter()
     {
-        if ($this->adapter instanceof CachedAdapter) {
-            return $this->adapter->getAdapter();
+        return $this->baseAdapter;
+    }
+
+    /**
+     * Returns an array of file metadata.
+     *
+     * @param string $path
+     * @param array $metadata
+     * @return array
+     */
+    public function getWithMetaData($path, $metadata = []): array
+    {
+        // get file using fullpath so we can access its properties
+        $file = new \SplFileInfo($this->backendConfig['root'].$path);
+
+        $normalized = [
+            'type' => $file->getType(),
+            'path' => $file->getPathname(),
+        ];
+
+        $normalized['timestamp'] = $file->getMTime();
+
+        if ($normalized['type'] === 'file') {
+            $normalized['size'] = $file->getSize();
         }
 
-        return $this->adapter;
+        $normalized['mimetype'] = (new ExtensionMimeTypeDetector())->detectMimeTypeFromPath($path);
+
+        if (empty($metadata)) {
+            return $normalized;
+        }
+
+        return array_filter($normalized, function ($key) use ($metadata) {
+            return in_array($key, $metadata);
+        }, ARRAY_FILTER_USE_KEY);
     }
 }

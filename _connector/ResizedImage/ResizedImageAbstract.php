@@ -19,6 +19,7 @@ use CKSource\CKFinder\Exception\CKFinderException;
 use CKSource\CKFinder\Filesystem\Path;
 use CKSource\CKFinder\Image;
 use CKSource\CKFinder\ResourceType\ResourceType;
+use League\Flysystem\FilesystemException;
 
 abstract class ResizedImageAbstract
 {
@@ -222,16 +223,18 @@ abstract class ResizedImageAbstract
     public function save()
     {
         if (!$this->backend->hasDirectory($this->getDirectory())) {
-            $this->backend->createDir($this->getDirectory());
+            $this->backend->createDirectory($this->getDirectory());
         }
 
-        $saved = $this->backend->put($this->getFilePath(), $this->resizedImageData, ['mimetype' => $this->getMimeType()]);
+        try {
+            $this->backend->write($this->getFilePath(), $this->resizedImageData, ['mimetype' => $this->getMimeType()]);
 
-        if ($saved) {
             $this->timestamp = time();
+        } catch (FilesystemException $e) {
+            return false;
         }
 
-        return $saved;
+        return true;
     }
 
     /**

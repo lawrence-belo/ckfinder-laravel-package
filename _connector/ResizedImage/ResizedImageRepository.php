@@ -207,7 +207,7 @@ class ResizedImageRepository
                 $sourceImageSize = ResizedImage::getSizeFromFilename($resizedImage['basename']);
                 $targetImageFilename = ResizedImage::createFilename($targetFileName, $sourceImageSize['width'], $sourceImageSize['height']);
 
-                $targetBackend->putStream(Path::combine($targetResizedImagesPath, $targetImageFilename), $resizedImageStream);
+                $targetBackend->writeStream(Path::combine($targetResizedImagesPath, $targetImageFilename), $resizedImageStream);
             }
         }
     }
@@ -236,7 +236,7 @@ class ResizedImageRepository
                         continue;
                     }
 
-                    $sourceImageSize = ResizedImage::getSizeFromFilename($resizedImage['basename']);
+                    $sourceImageSize = ResizedImage::getSizeFromFilename(pathinfo($resizedImage['path'], PATHINFO_BASENAME));
                     $newResizedImageFilename = ResizedImage::createFilename($newSourceFileName, $sourceImageSize['width'], $sourceImageSize['height']);
 
                     $backend->rename($resizedImage['path'], Path::combine($newResizedImagesPath, $newResizedImageFilename));
@@ -268,15 +268,14 @@ class ResizedImageRepository
             return $resizedImages;
         }
 
-        $resizedImagesFiles = array_filter(
-            $backend->listContents($resizedImagesPath),
-            function ($v) {
-                return isset($v['type']) && 'file' === $v['type'];
-            }
-        );
-
+        $resizedImagesFiles = $backend->listContents($resizedImagesPath);
         foreach ($resizedImagesFiles as $resizedImage) {
-            $size = ResizedImage::getSizeFromFilename($resizedImage['basename']);
+            // skip if not a file
+            if (! (isset($resizedImage['type']) && 'file' === $resizedImage['type'])) {
+                continue;
+            }
+
+            $size = ResizedImage::getSizeFromFilename($resizedImage['path']);
 
             if ($sizeName = $this->getSizeNameFromConfig($size['width'], $size['height'])) {
                 if (empty($filterSizes) || \in_array($sizeName, $filterSizes, true)) {
@@ -316,17 +315,16 @@ class ResizedImageRepository
             return null;
         }
 
-        $resizedImagesFiles = array_filter(
-            $backend->listContents($resizedImagesPath),
-            function ($v) {
-                return isset($v['type']) && 'file' === $v['type'];
-            }
-        );
-
+        $resizedImagesFiles = $backend->listContents($resizedImagesPath);
         $thresholdPixels = $this->config->get('images.threshold.pixels');
         $thresholdPercent = (float) $this->config->get('images.threshold.percent') / 100;
 
         foreach ($resizedImagesFiles as $resizedImage) {
+            // skip if not a file
+            if (! (isset($resizedImage['type']) && 'file' === $resizedImage['type'])) {
+                continue;
+            }
+
             $resizedImageSize = ResizedImage::getSizeFromFilename($resizedImage['basename']);
             $resizedImageWidth = $resizedImageSize['width'];
             $resizedImageHeight = $resizedImageSize['height'];
@@ -404,13 +402,14 @@ class ResizedImageRepository
 
     protected function createNodeValue($resizedImage)
     {
+        $basename = pathinfo($resizedImage['path'], PATHINFO_BASENAME);
         if (isset($resizedImage['url'])) {
             return [
-                'name' => $resizedImage['basename'],
+                'name' => $basename,
                 'url' => $resizedImage['url'],
             ];
         }
 
-        return $resizedImage['basename'];
+        return $basename;
     }
 }

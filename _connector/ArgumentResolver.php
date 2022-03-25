@@ -52,7 +52,7 @@ class ArgumentResolver implements ArgumentResolverInterface
      *
      * @return array arguments used during the command callable execution
      */
-    public function getArguments(Request $request, callable $command)
+    public function getArguments(Request $request, callable $command): array
     {
         $r = new \ReflectionMethod($command[0], $command[1]);
 

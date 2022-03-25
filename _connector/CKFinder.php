@@ -489,7 +489,7 @@ class CKFinder extends Container implements HttpKernelInterface
      *
      * @return \Symfony\Component\HttpFoundation\Response
      */
-    public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true)
+    public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
     {
         /** @var HttpKernel $kernel */
         $kernel = $this['kernel'];
